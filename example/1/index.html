@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/jointjs/2.1.0/joint.css" />
+
+</head>
+<body>
+    <!-- content -->
+    <div id="myholder"></div>
+    <div id="paper"></div>
+    <!-- dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/3.10.1/lodash.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/backbone.js/1.3.3/backbone.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jointjs/3.2.0/joint.js"></script>
+
+    <!-- code -->
+    <script type="text/javascript">
+      var graph = new joint.dia.Graph;
+
+      var paper = new joint.dia.Paper({
+          el: document.getElementById('myholder'),
+          model: graph,
+          width: 1000,
+          height: 1000,
+          gridSize: 1,
+          linkPinning: false,
+          defaultLink:new joint.shapes.devs.Link({
+              attrs: {
+                  line: {
+                      stroke: '#4e4e4e'
+                  }
+              },
+              typeOfConnection: 'out',
+              connector: { name: 'rounded' },
+              router: { name: 'manhattan' }
+          }),
+
+          interactive: function(cellView) {
+              if (cellView.model.isLink()) {
+                  return {
+                      vertexAdd: true,
+                      vertexRemove: true,
+                      arrowheadMove: false,
+                      vertexMove: true
+                  }
+              }
+              return true;
+          },
+/*
+          validateMagnet: function(cellView, magnet) {
+              // Prevent links from ports that already have a link
+              var port = magnet.getAttribute('port');
+              var links = graph.getConnectedLinks(cellView.model, { outbound: true });
+              var portLinks = _.filter(links, function(o) {
+                  return o.get('source').port == port
+              })
+              if(portLinks.length > 0) return false;
+              // Note that this is the default behaviour. Just showing it here for reference.
+              // Disable linking interaction for magnets marked as passive (see below `.inPorts circle`).
+              return magnet.getAttribute('magnet') !== 'passive'
+          },
+*/
+          validateConnection: function (cellViewS, magnetS, cellViewT, magnetT, end, linkView) {
+              console.log('cellViewS = ', cellViewS)
+              console.log('magnetS = ', magnetS)
+              console.log('cellViewT = ', cellViewT)
+              console.log(magnetT)
+              console.log('end = ', end)
+              console.log('linkView = ', linkView)
+              console.log('------------------------------')
+/*
+              if ( magnetS != undefined ) {
+                  // only one link from source
+                  var port = magnetS.getAttribute('port');
+                  var links = graph.getConnectedLinks(cellViewS.model, { outbound: true });
+                  var portLinks = _.filter(links, function (o) {
+                      return o.get('source').port == port
+                  })
+                  if (portLinks.length > 0) return false;
+              }
+*/
+              // Prevent linking from output ports to input ports within one element.
+              if (cellViewS === cellViewT) return false
+              // Prevent linking to input ports.
+              return magnetT && magnetT.getAttribute('port-group') === 'c'
+          }
+      })
+
+      paper.on('link:connect', function(linkView, evt, elementViewConnected, magnet, arrowhead) {
+          console.log('-----------------------------')
+          console.log('LINK CONNECTED')
+          console.log('linkView = ', linkView)
+          console.log('evt = ', evt)
+          console.log('elementViewConnected = ', elementViewConnected)
+          console.log('magnet = ', magnet)
+          console.log('arrowhead = ', arrowhead)
+          // если на исходном порту НЕТУ мультиВыход то при подключении выключаем магнет.
+          //if ( linkView.sourceMagnet.getAttribute('multiOut') != true )
+         // let v = paper.findView('[model-id="'+linkView.model.attributes.source.id+'"]')
+
+          let e = graph.getCell(linkView.model.attributes.source.id)
+          let v = e.findView(paper)
+          let p = v.findPortNode(linkView.model.attributes.source.port)
+          $(p).removeAttr('magnet')
+
+          e = graph.getCell(linkView.model.attributes.target.id)
+          v = e.findView(paper)
+          p = v.findPortNode(linkView.model.attributes.target.port)
+          $(p).removeAttr('magnet')
+
+
+          //linkView.sourceMagnet.removeAttribute('magnet');
+          // если на таргет порту НЕТУ мультиВход то при подключении выключаем магнет.
+          //if ( linkView.targetMagnet.getAttribute('multiIn') != true )
+              //linkView.targetMagnet.removeAttribute('magnet');
+
+          //let te = graph.getCell(linkView.model.attributes.target.id)
+          //let tr = paper.findView('[port="'+linkView.model.attributes.target.port+'"]')
+          //tr.$el.removeAttr('magnet')
+      })
+/*
+      paper.on('link:disconnect', function(linkView, evt, elementViewConnected, magnet, arrowhead) {
+          console.log('-----------------------------')
+          console.log('LINK DISCONNECT')
+          console.log('linkView = ', linkView)
+          console.log('evt = ', evt)
+          console.log('elementViewConnected = ', elementViewConnected)
+          console.log('magnet = ', magnet)
+          console.log('arrowhead = ', arrowhead)
+          // only one link from source
+          if ( linkView.sourceMagnet.getAttribute('multiOut') == true ) linkView.sourceMagnet.setAttribute('magnet',true)
+          if ( linkView.targetMagnet.getAttribute('multiIn') == true ) linkView.targetMagnet.setAttribute('magnet','passive')
+
+      })
+*/
+      graph.on('remove', function (cell, collection, opt) {
+          if (cell.isLink()) {
+              // a link was removed  (cell.id contains the ID of the removed link)
+              console.log('Link remove', cell, collection, opt)
+              let all = graph.getElements()
+              console.log('Graph all = ', all)
+
+              if ( cell.attributes.target.id == undefined ) {
+                  console.log('Remove snap link')
+                  return
+              }
+
+              let ea = graph.getCell(cell.attributes.source.id)
+              let va = ea.findView(paper)
+              let pa = va.findPortNode(cell.attributes.source.port)
+              $(pa).attr('magnet',true)
+
+              ea = graph.getCell(cell.attributes.target.id)
+              va = ea.findView(paper)
+              pa = va.findPortNode(cell.attributes.target.port)
+              $(pa).attr('magnet','passive')
+
+
+
+              /*
+              for ( let i in all ) {
+                  let e = all[i]
+                  if ( e.attributes.id == idSrc ) {
+                    //if ( e.attributes.multiOut == true || e.attributes.attrs.multiOut == true ) {
+                        e.portProp(portSrc,'attrs/magnet', true)
+                    //}
+                  }
+                  if ( e.attributes.id == idTrg ) {
+                      //if (e.attributes.multiIn == true || e.attributes.attrs.multiIn == true) {
+                          e.portProp(portTrg,'attrs/magnet', 'passive')
+                      //}
+                  }
+              }
+  */
+          }
+      })
+
+      paper.on('cell:pointerdblclick', function (cellView, evt, x, y) {
+          console.log('cellView', cellView)
+          var outa = graph.getConnectedLinks(cellView.model, { /*outbound: true*/ })
+          console.log('Links = ', outa)
+          console.log('Graph = ', graph.toJSON())
+      })
+
+          /*
+          paper.on('cell:pointerdblclick', function(evt, x, y) {
+
+            var linkView = this.getDefaultLink()
+              .set({
+                'source': { x: x, y: y },
+                'target': { x: x, y: y }
+              })
+              .router('metro')
+              .addTo(this.model)
+              .findView(this);
+
+            // initiate the linkView arrowhead movement
+            linkView.startArrowheadMove('target');
+
+            $(document).on({
+              'mousemove.example': onDrag,
+              'mouseup.example': onDragEnd
+            }, {
+              // shared data between listeners
+              view: linkView,
+              paper: this
+            });
+
+
+            function onDrag(evt) {
+              // transform client to paper coordinates
+              var p = evt.data.paper.snapToGrid({
+                x: evt.clientX,
+                y: evt.clientY
+              });
+              // manually execute the linkView mousemove handler
+              evt.data.view.pointermove(evt, p.x, p.y);
+            }
+
+            function onDragEnd(evt) {
+              // manually execute the linkView mouseup handler
+              evt.data.view.pointerup(evt);
+              $(document).off('.example');
+            }
+
+          });
+    */
+
+      var porta = {
+          id: 'porta', // generated if `id` value is not present
+          group: 'a',
+          args: {}, // extra arguments for the port layout function, see `layout.Port` section
+          label: {
+              position: {
+                  name: 'top',
+                  args: {
+                      y: 0,
+                      x: 0
+                  } // extra arguments for the label layout function, see `layout.PortLabel` section
+              },
+              markup: '<text class="label-text" fill="black" />'
+          },
+          markup: '<rect width="16" height="16" y="-8" stroke="black" fill="red" magnet="true" />',
+      }
+
+      var ra = new joint.shapes.standard.Rectangle({
+          multiOut: true
+      });
+      ra.position(100, 30);
+      ra.resize(80, 80);
+      ra.attr({
+          body: {
+              fill: 'blue'
+          },
+          label: {
+              text: 'Block A',
+              fill: 'white'
+          },
+      });
+      ra.addPort(porta)
+      ra.addTo(graph);
+
+      // BLOCK B
+
+      var portb = {
+        id: 'portb',
+        group: 'b',
+        args: {}, // extra arguments for the port layout function, see `layout.Port` section
+        label: {
+          position: {
+            name: 'top',
+            args: {
+              y: 0,
+              x: -40
+            } // extra arguments for the label layout function, see `layout.PortLabel` section
+          },
+          markup: '<text class="label-text" fill="black"/>'
+        },
+        markup: '<rect width="16" height="16" y="-16" stroke="black" magnet="true" fill="red"/>'
+      }
+
+      var rb = new joint.shapes.standard.BorderedImage({
+          myType:'lala'
+      });
+      rb.position(300, 30);
+      rb.resize(80, 80);
+      rb.attr({
+        body: {
+          fill: 'blue'
+        },
+        label: {
+          text: 'Block B',
+          fill: 'white'
+        }
+      });
+      rb.attr('image/xlinkHref', 'https://sun9-45.userapi.com/c845419/v845419774/203726/XLG_wj3SoYc.jpg?ava=1');
+
+      rb.addPort(portb)
+      rb.addTo(graph);
+
+      /*
+      var link = new joint.shapes.standard.Link();
+      link.source(rect);
+      link.target(rect2);
+      link.addTo(graph);
+      */
+
+      var portc1 = {
+        id: 'portc1', // generated if `id` value is not present
+        group: 'c',
+        args: {}, // extra arguments for the port layout function, see `layout.Port` section
+        label: {
+          position: {
+            name: 'top',
+            args: {
+              y: 0,
+              x: 0
+            } // extra arguments for the label layout function, see `layout.PortLabel` section
+          },
+          markup: '<text class="label-text" fill="black"/>'
+        },
+        markup: '<rect width="16" height="16" y="-8" strokegit ="red" fill="blue" magnet="passive" />'
+      }
+
+      var portc2 = {
+        id: 'portc2', // generated if `id` value is not present
+        group: 'c',
+        args: {}, // extra arguments for the port layout function, see `layout.Port` section
+        label: {
+          position: {
+            name: 'top',
+            args: {
+              y: 0,
+              x: 0
+            } // extra arguments for the label layout function, see `layout.PortLabel` section
+          },
+          markup: '<text class="label-text" fill="black"/>'
+        },
+        markup: '<rect width="16" height="16" y="-8" strokegit ="red" fill="blue" magnet="passive" />'
+      }
+
+      var rc = new joint.shapes.standard.Rectangle({
+        ports: {
+          groups: {
+            'c': {
+              position: 'top'
+            }
+          }
+        }
+      })
+      rc.resize(80, 80)
+      rc.position(200, 200)
+      rc.attr('root/title', 'joint.shapes.standard.Rectangle')
+      rc.attr('label/text', 'Block C')
+      rc.attr('body/fill', 'lightblue')
+      rc.addPort(portc1)
+      rc.addPort(portc2)
+      rc.addTo(graph);
+
+      // debug
+      let pl=rc.getPorts()
+      console.log(pl)
+
+
+/*
+      var link = new joint.shapes.devs.Link({
+        source: {
+          id: ra.id,
+          port: 'porta'
+        },
+        target: {
+          id: rc.id,
+          port: 'portc1'
+        },
+        connector: { name: 'rounded' },
+        router: { name: 'manhattan' }
+      });
+      // Assume graph has the srcModel and dstModel with in and out ports.
+      graph.addCell(link)
+*/
+
+      /*
+      var link = new joint.shapes.standard.Link({
+        z: 0,
+        attrs: {
+          line: {
+            sourceMarker: {
+              'type': 'circle',
+              'r': 4,
+              'stroke': '#333333'
+            },
+            targetMarker: {
+              'type': 'circle',
+              'r': 4,
+              'stroke': '#333333'
+            }
+          }
+        }
+      })
+      link.source(rect);
+      link.target(r);
+      link.addTo(graph);
+*/
+    </script>
+</body>
+</html>

@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/jointjs/2.1.0/joint.css"/>
+
+</head>
+<body>
+
+<button id="create">create element</button>
+<button id="save">graph to json</button>
+
+<!-- content -->
+<div id="myholder"></div>
+<div id="paper"></div>
+<!-- dependencies -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/3.10.1/lodash.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/backbone.js/1.3.3/backbone.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jointjs/3.2.0/joint.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.ui-contextmenu/1.18.1/jquery.ui-contextmenu.min.js"></script>
+<link href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css" rel="stylesheet" />
+
+<!-- code -->
+<script type="text/javascript">
+  var graph = new joint.dia.Graph
+
+  var link1 = new joint.dia.Link({
+    attrs: {
+      line: {
+        /*stroke: '#4e4e4e',
+        sourceMarker: {
+          'type': 'circle',
+          'r': 4,
+          'stroke': '#333333'
+        },
+        targetMarker: {
+          'type': 'circle',
+          'r': 4,
+          'stroke': '#333333'
+        }*/
+      }
+    },
+    typeOfConnection: 'out',
+    connector: { name: 'rounded' },
+    //router: { name: 'manhattan' }
+  })
+
+  link1.router('metro', {
+    excludeTypes: ['my.SelectRectangle']
+  })
+
+  link1.attr({
+    //'.marker-source': { d: 'M 0 10 m 0 -5  a 5 5 0 1 0 0 1', 'stroke-width': 0, fill: '#232E78' },
+    '.marker-target': { d: 'M 10 -5 10 5 0 0 z', 'stroke-width': 0, fill: '#232E78' }
+
+  })
+
+  var paper = new joint.dia.Paper({
+    el: document.getElementById('myholder'),
+    model: graph,
+    width: 1000,
+    height: 1000,
+    gridSize: 1,
+    linkPinning: false,
+    defaultLink: link1,
+    drawGrid: { name: 'mesh', args: { color: 'grey' }},
+    gridSize: 20,
+    interactive: function(cellView) {
+      if (cellView.model.isLink()) {
+        return {
+          remove: true,
+          vertexAdd: true,
+          vertexRemove: true,
+          arrowheadMove: false,
+        }
+      }
+      return {  elementMove: false };
+    },
+
+    validateConnection: function (cellViewS, magnetS, cellViewT, magnetT, end, linkView) {
+      console.log('cellViewS = ', cellViewS)
+      console.log('magnetS = ', magnetS)
+      console.log('cellViewT = ', cellViewT)
+      console.log(magnetT)
+      console.log('end = ', end)
+      console.log('linkView = ', linkView)
+      console.log('------------------------------')
+      /*
+                    if ( magnetS != undefined ) {
+                        // only one link from source
+                        var port = magnetS.getAttribute('port');
+                        var links = graph.getConnectedLinks(cellViewS.model, { outbound: true });
+                        var portLinks = _.filter(links, function (o) {
+                            return o.get('source').port == port
+                        })
+                        if (portLinks.length > 0) return false;
+                    }
+      */
+      // Prevent linking from output ports to input ports within one element.
+      if (cellViewS === cellViewT) return false
+
+      delete linkView.model.attributes.source.selector
+      delete linkView.model.attributes.target.selector
+      // Prevent linking to input ports.
+      return true
+    }
+  })
+
+/*
+  paper.on('link:mouseenter', function(linkView) {
+
+    var tools;
+
+    tools = [
+      new joint.linkTools.Vertices(),
+      new joint.linkTools.SourceArrowhead(),
+      new joint.linkTools.TargetArrowhead(),
+      new joint.linkTools.Remove({ distance: 20 })
+    ];
+    linkView.addTools(new joint.dia.ToolsView({
+      name: 'onhover',
+      tools: tools
+    }));
+
+  })
+
+  paper.on('link:mouseleave', function(linkView) {
+    if (!linkView.hasTools('onhover')) return;
+    linkView.removeTools();
+  })
+*/
+
+  paper.on('link:connect', function (linkView, evt, elementViewConnected, magnet, arrowhead) {
+    console.log('LINK CONNECTED')
+    console.log('linkView = ', linkView)
+    console.log('evt = ', evt)
+    console.log('elementViewConnected = ', elementViewConnected)
+    console.log('magnet = ', magnet)
+    console.log('arrowhead = ', arrowhead)
+    // only one link from source
+    //if ( linkView.sourceMagnet.getAttribute('multiOut') != true ) linkView.sourceMagnet.setAttribute('magnet',false);
+    //if ( linkView.targetMagnet.getAttribute('multiIn') != true ) linkView.targetMagnet.setAttribute('magnet',false);
+    linkView.sourceMagnet.removeAttribute('magnet');
+    delete linkView.model.attributes.source.selector
+    delete linkView.model.attributes.target.selector
+
+    paper.updateView(linkView)
+
+  })
+
+  paper.on('cell:pointerdblclick', function (cellView, evt, x, y) {
+    console.log('cellView', cellView)
+    var outa = graph.getConnectedLinks(ra, { outbound: true })
+    var outb = graph.getConnectedLinks(rc, { outbound: true })
+    console.log('Links = ', outa)
+    console.log('Links = ', outb)
+
+  })
+
+  paper.options.guard = function(evt) {
+    return (evt.type === 'mousedown' && evt.buttons === 2);
+  };
+
+  $(document).contextmenu({
+    autoTrigger: false,
+    delegate: ".joint-cell, .joint-paper",
+    menu: [],
+
+    beforeOpen: function(event, ui) {
+      var $menu = ui.menu,
+        target = ui.target,
+        extraData = ui.extraData; // optionally passed when menu was opened by call to open()
+
+      console.log('Target menu = ',target)
+      let x = target.parent('.joint-cell')
+
+      if ( target.parent().hasClass('joint-cell') || target.parent().parent().hasClass('joint-cell')) {
+        // Redefine the whole menu
+        $(document).contextmenu("replaceMenu", [
+          { title: "Magnet", cmd: "magnet", uiIcon: "ui-icon-copy" },
+          { title: "Remove", cmd: "remove", uiIcon: "ui-icon-delete" },
+        ]);
+      } else if ( target[0].tagName == 'svg' ) {
+        $(document).contextmenu("replaceMenu", [
+          { title: "Add", cmd: "add", uiIcon: "ui-icon-create" },
+        ]);
+      }
+    },
+    select: function(event, ui) {
+      console.log('Args = ', arguments)
+      console.log('Event = ', event, ' UI = ', ui)
+
+      if ( ui.cmd == 'magnet' ) {
+
+        let x = ui.target.parents('.joint-cell')
+        let r
+        if ( x.attr('data-type') == 'standard.Rectangle' ) {
+          r = x.find('rect[joint-selector="body"]')
+        } else if ( x.attr('data-type') == 'standard.BorderedImage' ) {
+          r = x.find('image[joint-selector="image"]')
+        } else if ( x.attr('data-type') == 'standard.HeaderedRectangle' ) {
+          r = x.find('image[joint-selector="bodyImage"]')
+        }
+        r.attr("magnet", true)
+
+      } else if ( ui.cmd == 'remove') {
+        ui.extraData.model.remove()
+      } else if ( ui.cmd == 'add' ) {
+
+        var headeredRectangle = new joint.shapes.standard.HeaderedRectangle({
+          markup: [{"tagName":"rect","selector":"body"},{"tagName":"rect","selector":"header"},{"tagName":"text","selector":"headerText"},{"tagName":"image","selector":"bodyImage","x":0,"y":0}]
+        });
+
+        headeredRectangle.resize(81, 110)
+        headeredRectangle.position(event.clientX, event.clientY)
+        headeredRectangle.attr('root/title', 'joint.shapes.standard.HeaderedRectangle')
+        headeredRectangle.attr('header/fill', 'white')
+        headeredRectangle.attr('headerText/text', 'Header')
+        //headeredRectangle.attr('bodyText/text', 'Headered');
+        headeredRectangle.attr('bodyImage/xlinkHref', 'https://sun9-45.userapi.com/c845419/v845419774/203726/XLG_wj3SoYc.jpg?ava=1')
+        headeredRectangle.attr('bodyImage/y', '31')
+        headeredRectangle.attr('bodyImage/x', '1')
+        headeredRectangle.attr('bodyImage/width', 79)
+        headeredRectangle.attr('bodyImage/height', 79)
+
+        //headeredRectangle.
+        headeredRectangle.addTo(graph)
+        console.log(headeredRectangle)
+      }
+    }
+  });
+
+  paper.on({
+    'blank:contextmenu': function (evt, x, y) {
+      console.log('blank:contextmenu cellView = ')
+      console.log('event = ', evt)
+      //evt.cell = cellView
+      $(document).contextmenu("open", evt)
+    }
+  })
+
+  paper.on({
+    'cell:contextmenu': function (cellView, evt, x, y) {
+      console.log('cell:contextmenu cellView = ', cellView)
+      console.log('event = ', evt)
+      evt.cell = cellView
+      $(document).contextmenu("open", evt, cellView)
+    }
+  })
+
+  paper.on({
+    'element:contextmenu': function (cellView, evt, x, y) {
+      console.log('element:contextmenu cellView = ', cellView)
+      console.log('event = ', evt)
+      evt.cell = cellView
+      $(document).contextmenu("open", evt, cellView)
+    }
+  })
+
+  /*
+        paper.on('cell:pointerdblclick', function (evt, x, y) {
+
+            var linkView = this.getDefaultLink()
+              .set({
+                  'source': { x: x, y: y },
+                  'target': { x: x, y: y }
+              })
+              .router('metro')
+              .addTo(this.model)
+              .findView(this)
+
+            // initiate the linkView arrowhead movement
+            linkView.startArrowheadMove('target')
+
+            $(document).on({
+                'mousemove.example': onDrag,
+                'mouseup.example': onDragEnd
+            }, {
+                // shared data between listeners
+                view: linkView,
+                paper: this
+            })
+
+            function onDrag (evt) {
+                // transform client to paper coordinates
+                var p = evt.data.paper.snapToGrid({
+                    x: evt.clientX,
+                    y: evt.clientY
+                })
+                // manually execute the linkView mousemove handler
+                evt.data.view.pointermove(evt, p.x, p.y)
+            }
+
+            function onDragEnd (evt) {
+                // manually execute the linkView mouseup handler
+                evt.data.view.pointerup(evt)
+                $(document).off('.example')
+            }
+
+        })
+  */
+  var ra = new joint.shapes.standard.Rectangle(
+    {
+      // attrs: { 'rect': { magnet: true } }
+    }
+  )
+  ra.position(100, 30)
+  ra.resize(80, 80)
+  ra.attr({
+    body: {
+      fill: 'blue'
+    },
+    label: {
+      text: 'Block A',
+      fill: 'white'
+    },
+    magnet: true
+  })
+  ra.addTo(graph)
+
+  // BLOCK B
+
+  var rb = new joint.shapes.standard.BorderedImage({
+    // attrs: { 'rect': { magnet: true } }
+  })
+  rb.position(300, 30)
+  rb.resize(80, 80)
+  rb.attr({
+    body: {
+      fill: 'blue'
+    },
+    /*label: {
+      text: 'Block B',
+      fill: 'white'
+    }*/
+  })
+  rb.attr('image/xlinkHref', 'https://sun9-45.userapi.com/c845419/v845419774/203726/XLG_wj3SoYc.jpg?ava=1')
+  rb.addTo(graph)
+
+
+
+  /*
+  var link = new joint.shapes.standard.Link();
+  link.source(rect);
+  link.target(rect2);
+  link.addTo(graph);
+  */
+
+  var rc = new joint.shapes.standard.Rectangle({
+    //attrs: { 'rect': { magnet: true } }
+  })
+  rc.resize(80, 80)
+  rc.position(200, 200)
+  rc.attr('root/title', 'joint.shapes.standard.Rectangle')
+  rc.attr('label/text', 'Block C')
+  rc.attr('label/z', -2)
+  rc.attr('body/fill', 'lightblue')
+  rc.addTo(graph)
+
+  // debug
+  /*
+        var link = new joint.shapes.devs.Link({
+          source: {
+            id: ra.id,
+          },
+          target: {
+            id: rc.id,
+          },
+          connector: { name: 'rounded' },
+          router: { name: 'manhattan' }
+        });
+        // Assume graph has the srcModel and dstModel with in and out ports.
+        graph.addCell(link)
+  */
+  var rectangle = null
+  var selectMoveList = []
+
+
+  joint.shapes.standard.Rectangle.define('my.SelectRectangle', {
+    attrs: {
+      body: {
+        'fill': 'none',
+        'stroke-width': '0.5',
+        'stroke-dasharray': '1%'
+      }
+    }
+  },{},{})
+
+    paper.on({
+    'element:pointerdblclick': function(elementView) {
+      var element = elementView.model;
+      var text = prompt('Shape Text', element.attr(['label', 'text']));
+      if (text !== null) {
+        element.attr({
+          label: { text: text },
+          root: { title: text }
+        });
+      }
+    },
+ /*   'link:mouseenter': function(linkView) {
+      linkView.addTools(new joint.dia.ToolsView({
+        tools: [
+          new joint.linkTools.Vertices({ snapRadius: 0 }),
+          new joint.linkTools.SourceArrowhead(),
+          new joint.linkTools.TargetArrowhead(),
+          new joint.linkTools.Remove({
+            distance: 20
+          })
+        ]
+      }));
+    },*/
+    'element:mouseenter': function(elementView) {
+      var model = elementView.model;
+      var bbox = model.getBBox();
+      var ellipseRadius = (1 - Math.cos(g.toRad(45)));
+      var offset = model.attr(['pointers', 'pointerShape']) === 'ellipse'
+        ? { x: -ellipseRadius * bbox.width / 2, y: ellipseRadius * bbox.height / 2  }
+        : { x: -3, y: 3 };
+
+      elementView.addTools(new joint.dia.ToolsView({
+        tools: [
+          new joint.elementTools.Remove({
+            useModelGeometry: true,
+            y: '0%',
+            x: '100%',
+            offset: offset
+          })
+        ]
+      }));
+    },
+    'cell:mouseleave': function(cellView) {
+      cellView.removeTools();
+    },
+    'blank:pointerdown': function(evt, x, y) {
+      var data = evt.data = {};
+      var cell;
+      data.x = x;
+      data.y = y;
+      rectangle = new joint.shapes.my.SelectRectangle();
+      rectangle.resize(1,1);
+      rectangle.position(x, y);
+      rectangle.attr('body/fill', 'none');
+      rectangle.attr('body/stroke-width', '0.5');
+      rectangle.attr('body/stroke-dasharray', '1%');
+
+      rectangle.addTo(graph);
+      data.cell = rectangle;
+    },
+    'blank:pointermove': function(evt, x, y) {
+      var data = evt.data;
+      var cell = data.cell;
+      if (cell.isLink()) {
+        //cell.target({ x: x, y: y });
+      } else {
+        console.log('resize = ',x - data.x, y - data.y)
+        let diffWidth = x - data.x
+        let diffHeight = y - data.y
+
+        let newX = data.x
+        let newY = data.y
+
+        if ( diffWidth < 0 ) newX = x
+        if ( diffHeight < 0 ) newY = y
+        if ( diffWidth < 0 || diffHeight < 0 ) data.cell.position(newX,newY)
+        data.cell.resize(Math.abs(diffWidth), Math.abs(diffHeight))
+
+      }
+    },
+    'blank:pointerup': function(evt) {
+      var cell = evt.data.cell;
+      if (cell.isLink()) return;
+      let list = graph.findModelsUnderElement(cell).map(x => {
+        if (x.attributes.type == 'standard.Rectangle') {
+          x.attr('body/stroke','red')
+        }
+        if (x.attributes.type == 'standard.BorderedImage') {
+          x.attr('border/stroke','red')
+        }
+        if (x.attributes.type == 'standard.HeaderedImage') {
+          x.attr('border/stroke', 'red')
+        }
+        console.log(x)
+        return x
+      })
+
+      console.log('Cell = ',cell)
+
+      let myX = cell.attributes.position.x
+      let myY = cell.attributes.position.y
+      let myWidth = cell.attributes.size.width
+      let myHeight = cell.attributes.size.height
+
+      let links = graph.getLinks()
+      console.log('All links',links)
+      for (let il in links) {
+        let link = links[il]
+        if (link.attributes.vertices == undefined) continue
+        for (let iv in link.attributes.vertices) {
+          let v = link.attributes.vertices[iv]
+
+          let vx = v.x
+          let vy = v.y
+
+          if ( vx > myX && vx < myX+myWidth && vy > myY && vy < myY+myHeight ) {
+            if ( list.indexOf(link) == -1 ) {
+              list.push(link)
+              let view = link.findView(paper)
+              console.log('LinkView', view)
+            }
+            if ( link.attributes.selectedVertices == undefined ) link.attributes.selectedVertices = []
+            link.attributes.selectedVertices.push(iv)
+          }
+        }
+      }
+
+      if ( list.length != 0 ) {
+        selectMoveList = list
+      }
+
+      console.log('Result list = ', list)
+
+      cell.remove()
+
+    },
+
+    // move selected
+
+    'element:pointerdown': function(item, evt ,x, y) {
+      console.log('element:pointerdown')
+      var data = item.data = {};
+      console.log('event:', item)
+      item.data.moveMode = true
+      item.data.shiftX = x - item.model.attributes.position.x
+      item.data.shiftY = y - item.model.attributes.position.y
+
+      console.log('shift ', item.data.shiftX, item.data.shiftY)
+
+      if (selectMoveList.length != 0 && selectMoveList.indexOf(item.model) == -1) {
+        // reset borders select
+        selectMoveList.map(x => {
+          if (x.attributes.type == 'standard.Rectangle') {
+            x.attr('body/stroke', 'black')
+          }
+          if (x.attributes.type == 'standard.BorderedImage') {
+            x.attr('border/stroke', 'black')
+          }
+          if (x.attributes.type == 'standard.HeaderedImage') {
+            x.attr('border/stroke', 'black')
+          }
+        })
+        selectMoveList = [item.model]
+      } else if (selectMoveList.length == 0) {
+        selectMoveList = [item.model]
+      }
+    },
+    'element:pointermove': function(item, evt ,x, y) {
+      console.log('element:pointermove ',item,'x=',x,' y=',y)
+      var data = item.data;
+      if (item.data.moveMode) {
+        if ( selectMoveList.length != 0 ) {
+          let newX = x-item.data.shiftX
+          let newY = y-item.data.shiftY
+          let diffNewX = newX-item.model.attributes.position.x
+          let diffNewY = newY-item.model.attributes.position.y
+          console.log('diff x = ',diffNewX, 'diff y = ',diffNewY)
+          selectMoveList.map(x => {
+            if ( x.attributes.type == 'link' || x.attributes.type == 'devs.Link' ) {
+              for ( let i in x.attributes.selectedVertices) {
+                let iv = x.attributes.selectedVertices[i]
+                console.log(x)
+                x.attributes.vertices[iv].x = x.attributes.vertices[iv].x + diffNewX
+                x.attributes.vertices[iv].y = x.attributes.vertices[iv].y + diffNewY
+              }
+              //x.vertices(x.attributes.vertices)
+            } else {
+              console.log(x.cid, x.attributes.position.x + diffNewX, x.attributes.position.y + diffNewY)
+              x.position(x.attributes.position.x + diffNewX, x.attributes.position.y + diffNewY)
+            }
+          })
+        }
+      }
+    },
+
+    'element:pointerup': function(item) {
+      item.data.moveMode = false;
+      selectMoveList.map(x => {
+        if (x.attributes.type == 'standard.Rectangle') {
+          x.attr('body/stroke', 'black')
+        }
+        if (x.attributes.type == 'standard.BorderedImage') {
+          x.attr('border/stroke', 'black')
+        }
+        if (x.attributes.type == 'standard.HeaderedImage') {
+          x.attr('border/stroke', 'black')
+        }
+        if ( x.attributes.type == 'link' || x.attributes.type == 'devs.Link' ) {
+          x.attributes.selectedVertices = []
+          let view = x.findView(paper)
+          console.log('element:pointerup LinkView = ',view)
+          view.renderVertexMarkers()
+        }
+
+      })
+      selectMoveList = []
+    }
+
+  });
+
+
+  $('#create').click(function () {
+
+    var headeredRectangle = new joint.shapes.standard.HeaderedRectangle({
+      markup: [{"tagName":"rect","selector":"body"},{"tagName":"rect","selector":"header"},{"tagName":"text","selector":"headerText"},{"tagName":"image","selector":"bodyImage","x":0,"y":0}]
+    });
+
+    headeredRectangle.resize(81, 110)
+    headeredRectangle.position(0, 0)
+    headeredRectangle.attr('root/title', 'joint.shapes.standard.HeaderedRectangle')
+    headeredRectangle.attr('header/fill', 'white')
+    headeredRectangle.attr('headerText/text', 'Header')
+    //headeredRectangle.attr('bodyText/text', 'Headered');
+    headeredRectangle.attr('bodyImage/xlinkHref', 'https://sun9-45.userapi.com/c845419/v845419774/203726/XLG_wj3SoYc.jpg?ava=1')
+    headeredRectangle.attr('bodyImage/y', '31')
+    headeredRectangle.attr('bodyImage/x', '1')
+    headeredRectangle.attr('bodyImage/width', 79)
+    headeredRectangle.attr('bodyImage/height', 79)
+
+    //headeredRectangle.
+    headeredRectangle.addTo(graph)
+    console.log(headeredRectangle)
+
+    /*
+    var rx = new joint.shapes.standard.Rectangle(
+      {
+        // attrs: { 'rect': { magnet: true } }
+      }
+    )
+    rx.position(0, 0)
+    rx.resize(80, 80)
+    rx.attr({
+      body: {
+        fill: 'blue'
+      },
+      label: {
+        text: 'Block X',
+        fill: 'white'
+      },
+      magnet: true
+    })
+    rx.addTo(graph)
+*/
+  })
+
+  $('#save').click(function () {
+    console.log('Json = ',graph.toJSON())
+  })
+
+</script>
+</body>
+</html>
